@@ -131,6 +131,9 @@ def migrate_database():
         inspector = inspect(db.engine)
         return table_name in inspector.get_table_names()
     
+    # Prüfe ob PostgreSQL oder SQLite
+    is_postgres = 'postgresql' in str(db.engine.url)
+    
     try:
         # Prüfe ob updated_at Spalte existiert
         if check_table_exists('shift_requests') and not check_column_exists('shift_requests', 'updated_at'):
@@ -147,17 +150,32 @@ def migrate_database():
         if not check_table_exists('shift_notes'):
             print("   Erstelle shift_notes Tabelle...")
             with db.engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE shift_notes (
-                        id SERIAL PRIMARY KEY,
-                        shift_request_id INTEGER NOT NULL,
-                        user_id INTEGER NOT NULL,
-                        content TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (shift_request_id) REFERENCES shift_requests(id) ON DELETE CASCADE,
-                        FOREIGN KEY (user_id) REFERENCES users(id)
-                    )
-                """))
+                if is_postgres:
+                    # PostgreSQL Syntax
+                    conn.execute(text("""
+                        CREATE TABLE shift_notes (
+                            id SERIAL PRIMARY KEY,
+                            shift_request_id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (shift_request_id) REFERENCES shift_requests(id) ON DELETE CASCADE,
+                            FOREIGN KEY (user_id) REFERENCES users(id)
+                        )
+                    """))
+                else:
+                    # SQLite Syntax
+                    conn.execute(text("""
+                        CREATE TABLE shift_notes (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            shift_request_id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (shift_request_id) REFERENCES shift_requests(id) ON DELETE CASCADE,
+                            FOREIGN KEY (user_id) REFERENCES users(id)
+                        )
+                    """))
                 conn.commit()
             print("   ✓ shift_notes Tabelle erstellt")
     except Exception as e:
