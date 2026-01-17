@@ -25,7 +25,7 @@ CORS(app,
      methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
 
 # Datenbank-Konfiguration
-# Verwende PostgreSQL auf Render, SQLite lokal
+# Lokal: SQLite (keine Admin-Rechte nötig) | Production: PostgreSQL
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///dienstwuensche.db')
 # Fix für Render (postgres:// -> postgresql://)
 if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
@@ -45,6 +45,7 @@ class User(db.Model):
     force_password_change = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
     shift_requests = db.relationship('ShiftRequest', backref='user', lazy=True, cascade='all, delete-orphan')
+    first_submission_at = db.Column(db.DateTime, nullable=True)  # Zeitpunkt des ersten Speicherns
 
 class ShiftRequest(db.Model):
     __tablename__ = 'shift_requests'
@@ -65,6 +66,16 @@ class ShiftNote(db.Model):
     shift_request_id = db.Column(db.Integer, db.ForeignKey('shift_requests.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    user = db.relationship('User')
+
+class ShiftRequestSnapshot(db.Model):
+    """Speichert ursprüngliche Dienstwünsche beim ersten Speichern"""
+    __tablename__ = 'shift_request_snapshots'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    shift_type = db.Column(db.String(20), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
     user = db.relationship('User')
 
@@ -131,7 +142,7 @@ def migrate_database():
         inspector = inspect(db.engine)
         return table_name in inspector.get_table_names()
     
-    # Prüfe ob PostgreSQL oder SQLite
+    # Erkenne Datenbanktyp
     is_postgres = 'postgresql' in str(db.engine.url)
     
     try:
@@ -178,6 +189,46 @@ def migrate_database():
                     """))
                 conn.commit()
             print("   ✓ shift_notes Tabelle erstellt")
+        
+        # Prüfe ob first_submission_at Spalte in users existiert
+        if check_table_exists('users') and not check_column_exists('users', 'first_submission_at'):
+            print("   Füge first_submission_at Spalte zu users hinzu...")
+            with db.engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE users 
+                    ADD COLUMN first_submission_at TIMESTAMP
+                """))
+                conn.commit()
+            print("   ✓ first_submission_at Spalte hinzugefügt")
+        
+        # Prüfe ob shift_request_snapshots Tabelle existiert
+        if not check_table_exists('shift_request_snapshots'):
+            print("   Erstelle shift_request_snapshots Tabelle...")
+            with db.engine.connect() as conn:
+                if is_postgres:
+                    conn.execute(text("""
+                        CREATE TABLE shift_request_snapshots (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            date DATE NOT NULL,
+                            shift_type VARCHAR(20) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        )
+                    """))
+                else:
+                    conn.execute(text("""
+                        CREATE TABLE shift_request_snapshots (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            date DATE NOT NULL,
+                            shift_type VARCHAR(20) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        )
+                    """))
+                conn.commit()
+            print("   ✓ shift_request_snapshots Tabelle erstellt")
     except Exception as e:
         print(f"   Warnung bei Migration: {e}")
 
