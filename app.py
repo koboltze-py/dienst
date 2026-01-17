@@ -36,38 +36,32 @@ if database_url.startswith('postgres://'):
 elif database_url.startswith('postgresql://'):
     database_url = database_url.replace('postgresql://', 'postgresql+psycopg://', 1)
 
-# IPv6 → IPv4 Fix: Hostname zu IPv4-Adresse auflösen
-if database_url.startswith('postgresql+psycopg://'):
-    try:
-        parsed = urlparse(database_url)
-        if parsed.hostname:
-            # Versuche IPv4-Adresse zu bekommen
-            ipv4_addr = socket.getaddrinfo(parsed.hostname, None, socket.AF_INET)[0][4][0]
-            # Ersetze Hostname durch IPv4-Adresse in der URL
-            netloc = parsed.netloc.replace(parsed.hostname, ipv4_addr)
-            database_url = urlunparse((
-                parsed.scheme,
-                netloc,
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                parsed.fragment
-            ))
-            print(f"✓ PostgreSQL: IPv4-Adresse {ipv4_addr} verwendet")
-    except Exception as e:
-        print(f"⚠️ Konnte Hostname nicht zu IPv4 auflösen: {e}")
-
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Engine-Optionen für robustere PostgreSQL-Verbindung
+connect_args = {
+    'connect_timeout': 10,
+    'options': '-c statement_timeout=30000'
+}
+
+# IPv6 → IPv4 Fix: hostaddr Parameter für psycopg3
+if database_url.startswith('postgresql+psycopg://'):
+    try:
+        parsed = urlparse(database_url)
+        if parsed.hostname:
+            # Hole IPv4-Adresse
+            ipv4_addr = socket.getaddrinfo(parsed.hostname, None, socket.AF_INET)[0][4][0]
+            # Setze hostaddr für psycopg3 (erzwingt IPv4)
+            connect_args['hostaddr'] = ipv4_addr
+            print(f"✓ PostgreSQL: IPv4-Adresse {ipv4_addr} via hostaddr")
+    except Exception as e:
+        print(f"⚠️ IPv4-Auflösung fehlgeschlagen: {e}")
+
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,  # Verbindung vor Verwendung prüfen
-    'pool_recycle': 300,    # Verbindungen nach 5 Minuten recyclen
-    'connect_args': {
-        'connect_timeout': 10,
-        'options': '-c statement_timeout=30000'  # 30 Sekunden Query-Timeout
-    }
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'connect_args': connect_args
 }
 
 db = SQLAlchemy(app)
