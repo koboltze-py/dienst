@@ -304,33 +304,31 @@
             button.textContent = 'Wird gespeichert...';
             
             try {
-                // Lösche alle bisherigen (nicht bestätigten) Einträge
-                for (const dateStr in existingShifts) {
-                    if (!existingShifts[dateStr].confirmed) {
-                        await fetch(`/api/shift-requests/${existingShifts[dateStr].id}`, {
-                            method: 'DELETE'
-                        });
-                    }
-                }
+                // Sende alle ausgewählten Dienste an die Batch-API
+                const response = await fetch('/api/shift-requests/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shifts: selectedShifts  // {date: shiftType}
+                    })
+                });
                 
-                // Erstelle neue Einträge
-                for (const dateStr in selectedShifts) {
-                    // Nur speichern wenn noch nicht bestätigt oder neu
-                    if (!existingShifts[dateStr] || !existingShifts[dateStr].confirmed) {
-                        await fetch('/api/shift-requests', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                date: dateStr,
-                                shiftType: selectedShifts[dateStr],
-                                remarks: ''
-                            })
-                        });
-                    }
-                }
+                const result = await response.json();
                 
-                alert('Dienstwünsche erfolgreich gespeichert!');
-                window.location.reload();
+                if (result.success) {
+                    // Zeige Warnung bei nachträglichen Änderungen
+                    if (result.is_modification) {
+                        alert('⚠️ WICHTIG: Änderungen nach der ersten Einreichung!\n\n' +
+                              'Sie haben Ihre Dienstwünsche nachträglich geändert.\n\n' +
+                              'Bitte senden Sie eine E-Mail an Herr Peters, um ihn über die Änderungen zu informieren.\n\n' +
+                              'Änderungen werden eventuell nicht berücksichtigt, wenn sie zu spät erfolgen.');
+                    } else {
+                        alert('Dienstwünsche erfolgreich gespeichert!');
+                    }
+                    window.location.reload();
+                } else {
+                    alert('Fehler beim Speichern: ' + (result.error || 'Unbekannter Fehler'));
+                }
             } catch (error) {
                 alert('Fehler beim Speichern');
                 console.error(error);

@@ -172,6 +172,55 @@
         </div>
     </div>
 
+    <!-- Modal für Änderungsvergleich -->
+    <div id="modificationsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 my-8">
+            <h3 class="text-xl font-bold mb-2">📊 Detaillierte Änderungsübersicht</h3>
+            <p id="modificationsUserName" class="text-gray-600 mb-2"></p>
+            <p id="modificationsTimestamp" class="text-sm text-gray-500 mb-6"></p>
+            
+            <!-- Zusammenfassung -->
+            <div id="modificationsSummary" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <!-- Wird durch JavaScript befüllt -->
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Ursprüngliche Einreichung -->
+                <div>
+                    <h4 class="text-lg font-semibold mb-3 text-blue-700">📋 Ursprüngliche Einreichung</h4>
+                    <div id="originalShifts" class="space-y-2 max-h-96 overflow-y-auto">
+                        <!-- Wird durch JavaScript befüllt -->
+                    </div>
+                </div>
+                
+                <!-- Aktuelle Dienstwünsche -->
+                <div>
+                    <h4 class="text-lg font-semibold mb-3 text-green-700">✏️ Aktuelle Dienstwünsche</h4>
+                    <div id="currentShifts" class="space-y-2 max-h-96 overflow-y-auto">
+                        <!-- Wird durch JavaScript befüllt -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Gelöschte Dienste -->
+            <div id="deletedShiftsSection" class="mt-6 hidden">
+                <h4 class="text-lg font-semibold mb-3 text-red-700">🗑️ Gelöschte Dienstwünsche</h4>
+                <div id="deletedShifts" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- Wird durch JavaScript befüllt -->
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end">
+                <button type="button" onclick="closeModificationsModal()" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
+                    Schließen
+                </button>
+            </div>
+        </div>
+    </div>
+            </button>
+        </div>
+    </div>
+
     <script>
         let allShifts = {{ requests|tojson }};
         let allUsers = {{ users|tojson }};
@@ -228,6 +277,7 @@
                 const userData = userShifts[userId];
                 const shifts = userData.shifts.sort((a, b) => new Date(a.date) - new Date(b.date));
                 const unconfirmedCount = shifts.filter(s => !s.confirmed).length;
+                const hasModifications = userData.shifts.some(s => s.first_submission_at);
                 
                 return `
                     <div class="border border-gray-200 rounded-lg overflow-hidden">
@@ -236,11 +286,18 @@
                                 <h3 class="text-lg font-bold text-gray-900">${userData.name}</h3>
                                 <p class="text-sm text-gray-600">${shifts.length} Dienstwunsch${shifts.length === 1 ? '' : 'e'} ${unconfirmedCount > 0 ? `(${unconfirmedCount} offen)` : ''}</p>
                             </div>
-                            ${unconfirmedCount > 0 ? `
-                                <button type="button" onclick="confirmAllUserShifts(${userId}, this)" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold">
-                                    Alle bestätigen (${unconfirmedCount})
-                                </button>
-                            ` : ''}
+                            <div class="flex items-center space-x-2">
+                                ${hasModifications ? `
+                                    <button type="button" onclick="showModifications(${userId}, '${userData.name}')" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-semibold">
+                                        ⚠️ Änderung
+                                    </button>
+                                ` : ''}
+                                ${unconfirmedCount > 0 ? `
+                                    <button type="button" onclick="confirmAllUserShifts(${userId}, this)" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold">
+                                        Alle bestätigen (${unconfirmedCount})
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                         <div class="divide-y divide-gray-200">
                             ${shifts.map(shift => `
@@ -350,6 +407,189 @@
 
         function closeNoteModal() {
             document.getElementById('noteModal').classList.add('hidden');
+        }
+
+        // Änderungsvergleich-Modal
+        async function showModifications(userId, userName) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/snapshots`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    alert('Fehler beim Laden der Änderungen');
+                    return;
+                }
+                
+                // Zeige Benutzername und Zeitstempel
+                document.getElementById('modificationsUserName').textContent = `Benutzer: ${userName}`;
+                const timestamp = data.first_submission_at ? 
+                    `Erste Einreichung: ${formatDateTime(data.first_submission_at)}` : 
+                    'Keine erste Einreichung gefunden';
+                document.getElementById('modificationsTimestamp').textContent = timestamp;
+                
+                // Berechne Statistiken
+                const originalDates = new Set(data.snapshots.map(s => s.date));
+                const currentDates = new Set(data.current.map(s => s.date));
+                
+                let addedCount = 0;
+                let modifiedCount = 0;
+                let deletedCount = 0;
+                let unchangedCount = 0;
+                
+                // Zähle hinzugefügte Dienste
+                data.current.forEach(shift => {
+                    const wasInOriginal = data.snapshots.some(s => s.date === shift.date);
+                    if (!wasInOriginal) {
+                        addedCount++;
+                    } else {
+                        const originalShift = data.snapshots.find(s => s.date === shift.date);
+                        if (originalShift.shift_type !== shift.shift_type) {
+                            modifiedCount++;
+                        } else {
+                            unchangedCount++;
+                        }
+                    }
+                });
+                
+                // Zähle gelöschte Dienste
+                data.snapshots.forEach(originalShift => {
+                    const stillExists = data.current.some(s => s.date === originalShift.date);
+                    if (!stillExists) {
+                        deletedCount++;
+                    }
+                });
+                
+                // Zeige Zusammenfassung
+                document.getElementById('modificationsSummary').innerHTML = `
+                    <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-yellow-700">${addedCount}</div>
+                        <div class="text-sm text-yellow-600">Neu hinzugefügt</div>
+                    </div>
+                    <div class="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-orange-700">${modifiedCount}</div>
+                        <div class="text-sm text-orange-600">Geändert</div>
+                    </div>
+                    <div class="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-red-700">${deletedCount}</div>
+                        <div class="text-sm text-red-600">Gelöscht</div>
+                    </div>
+                    <div class="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-green-700">${unchangedCount}</div>
+                        <div class="text-sm text-green-600">Unverändert</div>
+                    </div>
+                `;
+                
+                // Zeige ursprüngliche Dienstwünsche
+                const originalHtml = data.snapshots.length > 0 ? 
+                    data.snapshots
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(shift => {
+                            const stillExists = data.current.some(s => s.date === shift.date);
+                            const wasModified = data.current.some(s => s.date === shift.date && s.shift_type !== shift.shift_type);
+                            const borderColor = !stillExists ? 'border-red-400' : wasModified ? 'border-orange-300' : 'border-blue-200';
+                            
+                            return `
+                            <div class="p-3 bg-blue-50 border-2 ${borderColor} rounded-lg">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-medium">${getWeekday(shift.date)}, ${formatDate(shift.date)}</span>
+                                        ${!stillExists ? '<span class="ml-2 text-xs text-red-700 font-bold">❌ GELÖSCHT</span>' : ''}
+                                        ${wasModified ? '<span class="ml-2 text-xs text-orange-700 font-bold">⚠️ GEÄNDERT</span>' : ''}
+                                    </div>
+                                    <span class="px-3 py-1 rounded-full text-sm font-medium shift-tag-${shift.shift_type}">
+                                        ${shift.shift_type}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                        }).join('') 
+                    : '<p class="text-gray-500 text-sm">Keine ursprünglichen Dienstwünsche gefunden</p>';
+                document.getElementById('originalShifts').innerHTML = originalHtml;
+                
+                // Zeige aktuelle Dienstwünsche
+                const currentHtml = data.current.length > 0 ?
+                    data.current
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(shift => {
+                            const wasInOriginal = data.snapshots.some(s => s.date === shift.date);
+                            const isModified = data.snapshots.some(s => s.date === shift.date && s.shift_type !== shift.shift_type);
+                            const bgColor = !wasInOriginal ? 'bg-yellow-50 border-yellow-300' : 
+                                          isModified ? 'bg-orange-50 border-orange-300' : 
+                                          'bg-green-50 border-green-200';
+                            
+                            // Finde wann die Änderung gemacht wurde
+                            const createdTime = formatDateTime(shift.created_at);
+                            const updatedTime = shift.updated_at && shift.updated_at !== shift.created_at ? 
+                                formatDateTime(shift.updated_at) : null;
+                            
+                            return `
+                                <div class="p-3 ${bgColor} border-2 rounded-lg">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div>
+                                            <span class="font-medium">${getWeekday(shift.date)}, ${formatDate(shift.date)}</span>
+                                            ${!wasInOriginal ? '<span class="ml-2 text-xs text-yellow-700 font-bold">✨ NEU</span>' : ''}
+                                            ${isModified ? '<span class="ml-2 text-xs text-orange-700 font-bold">✏️ GEÄNDERT</span>' : ''}
+                                        </div>
+                                        <span class="px-3 py-1 rounded-full text-sm font-medium shift-tag-${shift.shift_type}">
+                                            ${shift.shift_type}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-2">
+                                        ${!wasInOriginal ? 
+                                            `<span class="font-semibold">Hinzugefügt:</span> ${createdTime}` : 
+                                            isModified && updatedTime ? 
+                                                `<span class="font-semibold">Geändert:</span> ${updatedTime}` : 
+                                                `<span class="text-gray-500">Unverändert seit Ersteinreichung</span>`
+                                        }
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')
+                    : '<p class="text-gray-500 text-sm">Keine aktuellen Dienstwünsche gefunden</p>';
+                document.getElementById('currentShifts').innerHTML = currentHtml;
+                
+                // Zeige gelöschte Dienste
+                const deletedShifts = data.snapshots.filter(originalShift => 
+                    !data.current.some(s => s.date === originalShift.date)
+                );
+                
+                if (deletedShifts.length > 0) {
+                    const deletedHtml = deletedShifts
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(shift => `
+                            <div class="p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-medium text-red-900">${getWeekday(shift.date)}, ${formatDate(shift.date)}</span>
+                                        <span class="ml-2 text-xs text-red-700 font-bold">❌ GELÖSCHT</span>
+                                    </div>
+                                    <div>
+                                        <span class="px-3 py-1 rounded-full text-sm font-medium shift-tag-${shift.shift_type} opacity-60">
+                                            ${shift.shift_type}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-red-700 mt-2">
+                                    <span class="font-semibold">War ursprünglich eingereicht</span>
+                                </div>
+                            </div>
+                        `).join('');
+                    document.getElementById('deletedShifts').innerHTML = deletedHtml;
+                    document.getElementById('deletedShiftsSection').classList.remove('hidden');
+                } else {
+                    document.getElementById('deletedShiftsSection').classList.add('hidden');
+                }
+                
+                // Zeige Modal
+                document.getElementById('modificationsModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Fehler beim Laden der Änderungen:', error);
+                alert('Fehler beim Laden der Änderungen');
+            }
+        }
+
+        function closeModificationsModal() {
+            document.getElementById('modificationsModal').classList.add('hidden');
         }
 
         function renderUsers() {

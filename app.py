@@ -441,6 +441,7 @@ def admin_dashboard():
             'confirmed': req.confirmed,
             'createdAt': req.created_at.isoformat(),
             'updatedAt': req.updated_at.isoformat() if req.updated_at else req.created_at.isoformat(),
+            'first_submission_at': req.user.first_submission_at.isoformat() if req.user.first_submission_at else None,
             'notes': notes_data
         })
     
@@ -1174,6 +1175,115 @@ def create_shift_request():
                 'confirmed': new_request.confirmed,
                 'createdAt': new_request.created_at.isoformat()
             }
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/users/<int:user_id>/snapshots', methods=['GET'])
+def get_user_snapshots(user_id):
+    """Hole ursprüngliche Dienstwünsche eines Benutzers (nur Admin)"""
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    
+    if not is_admin():
+        return jsonify({'success': False, 'error': 'Nicht autorisiert'}), 403
+    
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'success': False, 'error': 'Benutzer nicht gefunden'}), 404
+        
+        snapshots = ShiftRequestSnapshot.query.filter_by(user_id=user_id).order_by(ShiftRequestSnapshot.date).all()
+        current_shifts = ShiftRequest.query.filter_by(user_id=user_id).order_by(ShiftRequest.date).all()
+        
+        return jsonify({
+            'success': True,
+            'user_name': user.name,
+            'first_submission_at': user.first_submission_at.isoformat() if user.first_submission_at else None,
+            'snapshots': [{'date': s.date.isoformat(), 'shift_type': s.shift_type} for s in snapshots],
+            'current': [{
+                'date': s.date.isoformat(), 
+                'shift_type': s.shift_type, 
+                'confirmed': s.confirmed,
+                'created_at': s.created_at.isoformat(),
+                'updated_at': s.updated_at.isoformat() if s.updated_at else s.created_at.isoformat()
+            } for s in current_shifts]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/shift-requests/batch', methods=['POST'])
+def save_shifts_batch():
+    """Speichere mehrere Dienstwünsche gleichzeitig mit Änderungsverfolgung"""
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    
+    try:
+        user = get_current_user()
+        data = request.json
+        shifts = data.get('shifts', {})  # Dict: {date: shiftType}
+        
+        # Prüfe ob User bereits einmal gespeichert hat
+        is_first_submission = user.first_submission_at is None
+        has_changes = False
+        
+        if not is_first_submission:
+            # Prüfe ob es Änderungen gibt (neue Dienste oder geänderte Dienste)
+            existing_shifts = {sr.date.isoformat(): sr.shift_type for sr in ShiftRequest.query.filter_by(user_id=user.id).all()}
+            
+            for date_str, shift_type in shifts.items():
+                if date_str not in existing_shifts or existing_shifts[date_str] != shift_type:
+                    has_changes = True
+                    break
+            
+            # Prüfe auch ob Dienste entfernt wurden
+            for date_str in existing_shifts:
+                if date_str not in shifts and not ShiftRequest.query.filter_by(user_id=user.id, date=datetime.fromisoformat(date_str).date(), confirmed=True).first():
+                    has_changes = True
+                    break
+        
+        # Lösche alle nicht-bestätigten Dienstwünsche des Users
+        ShiftRequest.query.filter_by(user_id=user.id, confirmed=False).delete()
+        
+        # Erstelle neue Dienstwünsche
+        new_shifts = []
+        for date_str, shift_type in shifts.items():
+            # Überspringe wenn bereits bestätigt
+            if ShiftRequest.query.filter_by(user_id=user.id, date=datetime.fromisoformat(date_str).date(), confirmed=True).first():
+                continue
+            
+            new_shift = ShiftRequest(
+                user_id=user.id,
+                date=datetime.fromisoformat(date_str).date(),
+                shift_type=shift_type,
+                status='PENDING'
+            )
+            db.session.add(new_shift)
+            new_shifts.append(new_shift)
+        
+        # Bei erster Einreichung: Setze Zeitstempel und erstelle Snapshots
+        if is_first_submission:
+            user.first_submission_at = datetime.now()
+            
+            # Erstelle Snapshots der ursprünglichen Dienste
+            for date_str, shift_type in shifts.items():
+                snapshot = ShiftRequestSnapshot(
+                    user_id=user.id,
+                    date=datetime.fromisoformat(date_str).date(),
+                    shift_type=shift_type
+                )
+                db.session.add(snapshot)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'is_modification': not is_first_submission and has_changes,
+            'shift_count': len(new_shifts)
         })
     
     except Exception as e:
