@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Dienstwünsche</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .shift-tag-T {
+            background-color: #FEF3C7;
+            color: #92400E;
+        }
+        .shift-tag-T10 {
+            background-color: #DBEAFE;
+            color: #1E40AF;
+        }
+        .shift-tag-N10 {
+            background-color: #E0E7FF;
+            color: #3730A3;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900">Admin Dashboard</h1>
+                        <p class="text-sm text-gray-600">Angemeldet als: <span class="font-semibold text-red-600">{{ user_name }}</span></p>
+                    </div>
+                </div>
+                <a href="/logout" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Abmelden
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="flex border-b border-gray-200">
+                <button type="button" id="shiftsTab" class="flex-1 py-4 px-6 text-center font-semibold text-indigo-600 border-b-2 border-indigo-600" onclick="showShifts()">
+                    Dienstwünsche
+                </button>
+                <button type="button" id="usersTab" class="flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700" onclick="showUsers()">
+                    Benutzerverwaltung
+                </button>
+                <button type="button" id="messagesTab" class="flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 relative" onclick="showMessages()">
+                    Nachrichten
+                    <span id="unreadBadge" class="hidden absolute top-2 right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full"></span>
+                </button>
+                <button type="button" id="exportTab" class="flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700" onclick="showExport()">
+                    Export
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Dienstwünsche Tab (gebündelt nach Mitarbeiter) -->
+        <div id="shiftsContent">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">Dienstwünsche nach Mitarbeiter</h2>
+                <div id="userShiftsList" class="space-y-6">
+                    <!-- Wird durch JavaScript befüllt -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Benutzerverwaltung Tab -->
+        <div id="usersContent" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">Benutzer</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead>
+                            <tr>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registriert am</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rolle</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable" class="bg-white divide-y divide-gray-200">
+                            <!-- Wird durch JavaScript befüllt -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nachrichten Tab -->
+        <div id="messagesContent" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">Nachrichten von Benutzern</h2>
+                <div id="messagesList" class="space-y-4">
+                    <!-- Wird durch JavaScript befüllt -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Tab -->
+        <div id="exportContent" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">Excel Export</h3>
+                    <p class="text-gray-600 mb-4">Exportiere alle Dienstwünsche als Excel-Datei (.xlsx)</p>
+                    <button type="button" onclick="exportExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg">
+                        Excel herunterladen
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">PDF Export</h3>
+                    <p class="text-gray-600 mb-4">Exportiere als PDF-Dokument</p>
+                    <button type="button" onclick="exportPDF()" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg">
+                        PDF herunterladen
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">JSON Export</h3>
+                    <p class="text-gray-600 mb-4">Exportiere als JSON-Datei</p>
+                    <button type="button" onclick="exportJSON()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">
+                        JSON herunterladen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let allShifts = {{ requests|tojson }};
+        let allUsers = {{ users|tojson }};
+
+        function getWeekday(dateStr) {
+            const days = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+            const date = new Date(dateStr);
+            return days[date.getDay()];
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${day}.${month}.${date.getFullYear()}`;
+        }
+
+        function renderShiftsByUser() {
+            // Gruppiere Schichten nach Benutzer
+            const userShifts = {};
+            allShifts.forEach(shift => {
+                if (!userShifts[shift.user_name]) {
+                    userShifts[shift.user_name] = [];
+                }
+                userShifts[shift.user_name].push(shift);
+            });
+
+            // Sortiere Benutzer alphabetisch
+            const sortedUsers = Object.keys(userShifts).sort();
+
+            const container = document.getElementById('userShiftsList');
+            if (sortedUsers.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">Noch keine Dienstwünsche vorhanden.</p>';
+                return;
+            }
+
+            container.innerHTML = sortedUsers.map(userName => {
+                const shifts = userShifts[userName].sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                return `
+                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                        <div class="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                            <h3 class="text-lg font-bold text-gray-900">${userName}</h3>
+                            <p class="text-sm text-gray-600">${shifts.length} Dienstwunsch${shifts.length === 1 ? '' : 'e'}</p>
+                        </div>
+                        <div class="divide-y divide-gray-200">
+                            ${shifts.map(shift => `
+                                <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+                                    <div class="flex items-center space-x-4">
+                                        <div class="text-sm">
+                                            <span class="font-medium text-gray-900">${getWeekday(shift.date)}</span>
+                                            <span class="text-gray-600">, ${formatDate(shift.date)}</span>
+                                        </div>
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium shift-tag-${shift.shiftType}">
+                                            ${shift.shiftType}
+                                        </span>
+                                        ${shift.remarks ? `<span class="text-sm text-gray-500">${shift.remarks}</span>` : ''}
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onclick="confirmShift(${shift.id}, this)"
+                                        class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                            shift.confirmed 
+                                            ? 'bg-green-100 text-green-800 border border-green-300' 
+                                            : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                                        }">
+                                        ${shift.confirmed ? '✓ Bestätigt' : 'Bestätigen'}
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function confirmShift(id, button) {
+            try {
+                const response = await fetch(`/api/admin/shift-requests/${id}/confirm`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update UI
+                    if (data.confirmed) {
+                        button.className = 'inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-green-100 text-green-800 border border-green-300';
+                        button.textContent = '✓ Bestätigt';
+                    } else {
+                        button.className = 'inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200';
+                        button.textContent = 'Bestätigen';
+                    }
+                    
+                    // Update allShifts array
+                    const shift = allShifts.find(s => s.id == id);
+                    if (shift) shift.confirmed = data.confirmed;
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+                alert('Fehler beim Bestätigen');
+            }
+        }
+
+        function renderUsers() {
+            const tbody = document.getElementById('usersTable');
+            tbody.innerHTML = allUsers.map(user => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(user.created_at).toLocaleDateString('de-DE')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.is_admin ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}">
+                            ${user.is_admin ? 'Admin' : 'Benutzer'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                        <button type="button" onclick="toggleAdmin(${user.id})" class="text-indigo-600 hover:text-indigo-900">
+                            ${user.is_admin ? 'Degradieren' : 'Zu Admin'}
+                        </button>
+                        <button type="button" onclick="resetPassword(${user.id})" class="text-red-600 hover:text-red-900">
+                            PW zurücksetzen
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function toggleAdmin(userId) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/toggle-admin`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const user = allUsers.find(u => u.id === userId);
+                    if (user) user.is_admin = data.is_admin;
+                    renderUsers();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+                alert('Fehler beim Ändern der Rolle');
+            }
+        }
+
+        async function resetPassword(userId) {
+            if (!confirm('Passwort wirklich zurücksetzen?')) return;
+            
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+                alert('Fehler beim Zurücksetzen');
+            }
+        }
+
+        async function loadMessages() {
+            try {
+                const response = await fetch('/api/messages');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayMessages(data.messages);
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+            }
+        }
+
+        function displayMessages(messages) {
+            const container = document.getElementById('messagesList');
+            
+            if (messages.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">Keine Nachrichten vorhanden.</p>';
+                return;
+            }
+
+            // Count unread
+            const unread = messages.filter(m => !m.read_by_current_admin).length;
+            const badge = document.getElementById('unreadBadge');
+            if (unread > 0) {
+                badge.textContent = unread;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            container.innerHTML = messages.map(msg => `
+                <div class="border border-gray-200 rounded-lg p-4 ${msg.read_by_current_admin ? 'bg-white' : 'bg-blue-50'}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <span class="font-semibold text-gray-900">${msg.user_name}</span>
+                                <span class="text-sm text-gray-500">${new Date(msg.created_at).toLocaleString('de-DE')}</span>
+                                ${!msg.read_by_current_admin ? '<span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">NEU</span>' : ''}
+                            </div>
+                            <p class="text-gray-700">${msg.content}</p>
+                            ${msg.total_reads > 0 ? `<p class="text-xs text-gray-500 mt-2">Gelesen von ${msg.total_reads} Admin(s)</p>` : ''}
+                        </div>
+                        ${!msg.read_by_current_admin ? `
+                            <button type="button" onclick="markAsRead(${msg.id})" class="ml-4 text-sm text-blue-600 hover:text-blue-800">
+                                Als gelesen markieren
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function markAsRead(messageId) {
+            try {
+                const response = await fetch(`/api/messages/${messageId}/read`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    loadMessages();
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+            }
+        }
+
+        function showShifts() {
+            document.getElementById('shiftsContent').classList.remove('hidden');
+            document.getElementById('usersContent').classList.add('hidden');
+            document.getElementById('messagesContent').classList.add('hidden');
+            document.getElementById('exportContent').classList.add('hidden');
+            
+            document.getElementById('shiftsTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-indigo-600 border-b-2 border-indigo-600';
+            document.getElementById('usersTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('messagesTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 relative';
+            document.getElementById('exportTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+        }
+
+        function showUsers() {
+            document.getElementById('shiftsContent').classList.add('hidden');
+            document.getElementById('usersContent').classList.remove('hidden');
+            document.getElementById('messagesContent').classList.add('hidden');
+            document.getElementById('exportContent').classList.add('hidden');
+            
+            document.getElementById('shiftsTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('usersTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-indigo-600 border-b-2 border-indigo-600';
+            document.getElementById('messagesTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 relative';
+            document.getElementById('exportTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+        }
+
+        function showMessages() {
+            document.getElementById('shiftsContent').classList.add('hidden');
+            document.getElementById('usersContent').classList.add('hidden');
+            document.getElementById('messagesContent').classList.remove('hidden');
+            document.getElementById('exportContent').classList.add('hidden');
+            
+            document.getElementById('shiftsTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('usersTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('messagesTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-indigo-600 border-b-2 border-indigo-600 relative';
+            document.getElementById('exportTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            
+            loadMessages();
+        }
+
+        function showExport() {
+            document.getElementById('shiftsContent').classList.add('hidden');
+            document.getElementById('usersContent').classList.add('hidden');
+            document.getElementById('messagesContent').classList.add('hidden');
+            document.getElementById('exportContent').classList.remove('hidden');
+            
+            document.getElementById('shiftsTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('usersTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700';
+            document.getElementById('messagesTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 relative';
+            document.getElementById('exportTab').className = 'flex-1 py-4 px-6 text-center font-semibold text-indigo-600 border-b-2 border-indigo-600';
+        }
+
+        function exportExcel() {
+            window.location.href = '/api/admin/export/excel';
+        }
+
+        function exportPDF() {
+            window.location.href = '/api/admin/export/pdf';
+        }
+
+        async function exportJSON() {
+            try {
+                const response = await fetch('/api/admin/export');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const dataStr = JSON.stringify(data.data, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `dienstwuensche_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                console.error('Fehler:', error);
+                alert('Fehler beim Export');
+            }
+        }
+
+        // Init
+        renderShiftsByUser();
+        renderUsers();
+    </script>
+</body>
+</html>
