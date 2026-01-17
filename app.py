@@ -49,14 +49,30 @@ connect_args = {
 if database_url.startswith('postgresql+psycopg://'):
     try:
         parsed = urlparse(database_url)
-        if parsed.hostname:
-            # Hole IPv4-Adresse
-            ipv4_addr = socket.getaddrinfo(parsed.hostname, None, socket.AF_INET)[0][4][0]
-            # Setze hostaddr für psycopg3 (erzwingt IPv4)
-            connect_args['hostaddr'] = ipv4_addr
-            print(f"✓ PostgreSQL: IPv4-Adresse {ipv4_addr} via hostaddr")
+        hostname = parsed.hostname
+        
+        if hostname:
+            print(f"🔍 Hostname erkannt: {hostname}")
+            # Hole alle verfügbaren Adressen (IPv4 und IPv6)
+            addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            
+            # Suche nach IPv4-Adresse
+            ipv4_addr = None
+            for family, socktype, proto, canonname, sockaddr in addr_info:
+                if family == socket.AF_INET:  # IPv4
+                    ipv4_addr = sockaddr[0]
+                    break
+            
+            if ipv4_addr:
+                connect_args['hostaddr'] = ipv4_addr
+                print(f"✓ PostgreSQL: IPv4-Adresse {ipv4_addr} via hostaddr erzwungen")
+            else:
+                print(f"⚠️ Keine IPv4-Adresse gefunden für {hostname}, verwende Standard-Verbindung")
+        else:
+            print("⚠️ Kein Hostname in DATABASE_URL gefunden")
     except Exception as e:
         print(f"⚠️ IPv4-Auflösung fehlgeschlagen: {e}")
+        print(f"   DATABASE_URL: {database_url[:50]}...")
 
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
